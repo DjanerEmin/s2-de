@@ -1,0 +1,81 @@
+---
+title: "Spatial Data in R"
+author: "D. Emin"
+date: "10/23/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Using NUTS data in R
+
+NUTS is a FAO unified code system for the administrative regions of the world. 
+
+It can be accessed via the `cartography` package .
+
+```{r}
+library(sf)
+nuts <- st_as_sf(cartography::nuts1.spdf)
+DE <- nuts[grepl("DE", nuts$id), ]
+plot(DE)
+```
+
+Another alternative is to use `raster::getData`. This function et geographic data for anywhere in the world. Data are read from files that are first downloaded if necessary.
+
+```{r}
+DE <- st_as_sf(raster::getData("GADM", level = 1, country = "DE"))
+plot(DE)
+
+head(DE)
+```
+
+# Sentinel-2 tiles
+
+```{r}
+if (!file.exists("tiles.rda")) {
+        # read tile geometries from:
+        # https://sentinel.esa.int/web/sentinel/missions/sentinel-2/data-products
+        tiles = read_sf("https://sentinel.esa.int/documents/247904/1955685/S2A_OPER_GIP_TILPAR_MPC__20151209T095117_V20150622T000000_21000101T000000_B00.kml")
+        tiles = st_zm(st_collection_extract(tiles, "POLYGON"))
+        tiles$Description = NULL
+        tiles = aggregate(tiles, list(Name = tiles$Name), function(x) x[1])
+        save(tiles, file = "tiles.rda")
+} else
+        load("tiles.rda")
+```
+
+
+```{r}
+tiles
+tiles = tiles[DE,]
+col <- sf.colors(categorical=TRUE, alpha=.5)
+plot(tiles[,1], reset = FALSE, col = col)
+plot(DE, add = TRUE, col = NA)
+```
+
+
+```{r}
+tiles
+DE
+```
+
+```{r}
+joined <- st_join(DE, tiles)
+joined
+```
+
+
+```{r}
+bayern <- joined[joined$NAME_1 == "Bayern", 1]
+
+plot(tiles[bayern, 1], reset = FALSE, col = col)
+plot(DE, add = TRUE, col = NA, lty = 2)
+plot(bayern, add = TRUE , col = NA)
+```
+
+```{r}
+readr::write_csv(sf::st_drop_geometry(joined), "joined.csv")
+```
+
